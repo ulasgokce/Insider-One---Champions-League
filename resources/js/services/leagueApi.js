@@ -15,6 +15,7 @@ export const leagueApi = {
     configureTeams: (teamIds) => api.post('/league/configure-teams', { team_ids: teamIds }),
     playMatch: (id) => api.post(`/matches/${id}/play`),
     playWeek: () => api.post('/league/play-week'),
+    nextWeek: () => api.post('/league/next-week'),
     playAll: () => api.post('/league/play-all'),
     updateMatch: (id, homeGoals, awayGoals) => api.patch(`/matches/${id}`, {
         home_goals: homeGoals,

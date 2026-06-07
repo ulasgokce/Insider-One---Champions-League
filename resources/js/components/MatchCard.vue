@@ -3,14 +3,12 @@
         :is="match.status === 'played' ? 'div' : 'button'"
         :type="match.status === 'played' ? undefined : 'button'"
         class="group relative w-full rounded-2xl border p-3 text-left transition-all duration-300"
-        :class="match.status === 'played'
-            ? 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60'
-            : 'border-emerald-200 bg-white hover:border-emerald-400 hover:shadow-md active:scale-[0.99] dark:border-emerald-900 dark:bg-slate-900 dark:hover:border-emerald-600'"
-        :disabled="loading"
+        :class="matchCardClass"
+        :disabled="loading || blocked"
         @click="handleClick"
     >
         <button
-            v-if="match.status === 'played'"
+            v-if="match.status === 'played' && allowEdit"
             type="button"
             class="absolute right-2 top-2 rounded-lg p-1.5 text-slate-400 opacity-70 transition-opacity hover:bg-slate-200 hover:text-slate-700 hover:opacity-100 dark:hover:bg-slate-700 dark:hover:text-slate-200"
             title="Edit score"
@@ -71,17 +69,32 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
 import TeamLogo from './TeamLogo.vue';
 
 const props = defineProps({
     match: { type: Object, required: true },
     loading: { type: Boolean, default: false },
+    blocked: { type: Boolean, default: false },
+    allowEdit: { type: Boolean, default: true },
 });
 
 const emit = defineEmits(['play', 'edit']);
 
+const matchCardClass = computed(() => {
+    if (props.match.status === 'played') {
+        return 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60';
+    }
+
+    if (props.blocked) {
+        return 'cursor-not-allowed border-slate-200 bg-slate-100 opacity-50 dark:border-slate-700 dark:bg-slate-800/40';
+    }
+
+    return 'border-emerald-200 bg-white hover:border-emerald-400 hover:shadow-md active:scale-[0.99] dark:border-emerald-900 dark:bg-slate-900 dark:hover:border-emerald-600';
+});
+
 const handleClick = () => {
-    if (props.match.status !== 'played' && !props.loading) {
+    if (props.match.status !== 'played' && !props.loading && !props.blocked) {
         emit('play', props.match);
     }
 };

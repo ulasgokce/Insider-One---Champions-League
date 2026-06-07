@@ -21,6 +21,8 @@
                         :current-week="state.season.current_week"
                         :total-weeks="state.season.total_weeks"
                         :fixtures-by-week="state.results_by_week"
+                        :season-complete="state.season.is_finished"
+                        @edit-match="openEditModal"
                     />
                 </Transition>
 
@@ -37,8 +39,12 @@
                             :fixtures="state.current_week_fixtures"
                             :current-week="state.season.current_week"
                             :loading-match-id="loadingMatchId"
+                            :can-next-week="canNextWeek"
+                            :allow-edit="!state.season.is_finished"
+                            :loading="loading || loadingMatchId !== null"
                             @play-match="playMatch"
                             @edit-match="openEditModal"
+                            @next-week="nextWeek"
                         />
                     </Transition>
 
@@ -66,22 +72,13 @@
                             </Transition>
                         </div>
                     </div>
-
-                    <Transition name="slide-fade">
-                        <SeasonResultsByWeek
-                            v-if="showPlayAllResults"
-                            ref="playAllResultsRef"
-                            :results-by-week="playAllResults"
-                            @edit-match="openEditModal"
-                        />
-                    </Transition>
                 </div>
             </template>
         </main>
 
         <div class="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-2 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 md:static md:mt-6 md:border-0 md:bg-transparent md:p-0 md:px-6">
             <DashboardControls
-                :loading="loading"
+                :loading="loading || loadingMatchId !== null"
                 :can-play-week="canPlayWeek"
                 :can-play-all="canPlayAll"
                 @reset="resetSeason"
@@ -122,7 +119,6 @@ import DashboardControls from '../components/DashboardControls.vue';
 import MatchEditModal from '../components/MatchEditModal.vue';
 import TeamSelectModal from '../components/TeamSelectModal.vue';
 import ConfettiOverlay from '../components/ConfettiOverlay.vue';
-import SeasonResultsByWeek from '../components/SeasonResultsByWeek.vue';
 import { confirmApplyTeams, confirmResetSeason } from '../utils/swal';
 
 const state = ref(null);
@@ -135,24 +131,8 @@ const showTeamModal = ref(false);
 const showConfetti = ref(false);
 const confettiFired = ref(false);
 const trophySectionRef = ref(null);
-const playAllResultsRef = ref(null);
 const initialLoadComplete = ref(false);
 const seasonProgressExpanded = ref(false);
-const showPlayAllResults = ref(false);
-const playAllResults = ref([]);
-
-const scrollToElement = (element) => {
-    if (!element) {
-        return;
-    }
-
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    element.scrollIntoView({
-        behavior: prefersReducedMotion ? 'auto' : 'smooth',
-        block: 'start',
-    });
-};
 
 const scrollToTrophy = () => {
     nextTick(() => {
@@ -172,17 +152,17 @@ const scrollToTrophy = () => {
     });
 };
 
-const scrollToPlayAllResults = () => {
-    nextTick(() => {
-        requestAnimationFrame(() => {
-            scrollToElement(playAllResultsRef.value?.sectionRef);
-        });
-    });
-};
-
 const canPlayWeek = computed(() => {
     if (!state.value) return false;
     return state.value.current_week_fixtures.some((match) => match.status !== 'played');
+});
+
+const canNextWeek = computed(() => {
+    if (!state.value) return false;
+    const { season } = state.value;
+    return season.current_week_complete
+        && season.current_week < season.total_weeks
+        && !season.is_finished;
 });
 
 const canPlayAll = computed(() => state.value?.season.has_unplayed_matches ?? false);
@@ -195,6 +175,7 @@ watch(
         }
 
         if (finished && state.value?.champion && !confettiFired.value) {
+            seasonProgressExpanded.value = true;
             showConfetti.value = true;
             confettiFired.value = true;
             scrollToTrophy();
@@ -205,6 +186,10 @@ watch(
 
         if (!finished) {
             confettiFired.value = false;
+        }
+
+        if (finished) {
+            editingMatch.value = null;
         }
     },
 );
@@ -231,6 +216,10 @@ const flashHighlight = (teamId) => {
 };
 
 const playMatch = async (match) => {
+    if (loadingMatchId.value !== null) {
+        return;
+    }
+
     loadingMatchId.value = match.id;
     error.value = '';
 
@@ -259,6 +248,20 @@ const playWeek = async () => {
     }
 };
 
+const nextWeek = async () => {
+    loading.value = true;
+    error.value = '';
+
+    try {
+        const { data } = await leagueApi.nextWeek();
+        state.value = data;
+    } catch (err) {
+        error.value = err.response?.data?.message ?? 'Failed to advance week.';
+    } finally {
+        loading.value = false;
+    }
+};
+
 const playAll = async () => {
     loading.value = true;
     error.value = '';
@@ -266,10 +269,7 @@ const playAll = async () => {
     try {
         const { data } = await leagueApi.playAll();
         state.value = data;
-        playAllResults.value = data.play_all_results ?? data.results_by_week ?? [];
-        showPlayAllResults.value = true;
         seasonProgressExpanded.value = true;
-        scrollToPlayAllResults();
     } catch (err) {
         error.value = err.response?.data?.message ?? 'Failed to play all matches.';
     } finally {
@@ -292,8 +292,6 @@ const resetSeason = async () => {
         });
         state.value = data;
         confettiFired.value = false;
-        showPlayAllResults.value = false;
-        playAllResults.value = [];
         seasonProgressExpanded.value = false;
     } catch (err) {
         error.value = err.response?.data?.message ?? 'Failed to reset season.';
@@ -316,8 +314,6 @@ const configureTeams = async (teamIds) => {
         state.value = data;
         showTeamModal.value = false;
         confettiFired.value = false;
-        showPlayAllResults.value = false;
-        playAllResults.value = [];
         seasonProgressExpanded.value = false;
     } catch (err) {
         error.value = err.response?.data?.message ?? 'Failed to update teams.';
@@ -327,6 +323,10 @@ const configureTeams = async (teamIds) => {
 };
 
 const openEditModal = (match) => {
+    if (state.value?.season?.is_finished) {
+        return;
+    }
+
     editingMatch.value = match;
 };
 

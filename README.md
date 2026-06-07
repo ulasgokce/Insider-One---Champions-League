@@ -18,7 +18,7 @@ Replace this line with your actual Render URL once deployed.
 - Realistic Poisson-based match simulation using team power, home advantage, supporter strength, and goalkeeper factors
 - Week-by-week simulation with per-match play or **Play Week**; weeks auto-advance when complete
 - Championship predictions from Week 4 (last 3 weeks) with Monte Carlo simulation, clinch detection, and tight-race weighting
-- **Play All** runs the full season and shows **Season Results by Week**
+- **Play All** runs the full season and highlights **Season Progress** with full results by week
 - **Edit scores** on played matches (pencil icon) — standings and predictions recalculate
 - Trophy + confetti when the season finishes
 - Mobile-first responsive UI, dark/light mode, SweetAlert confirmations

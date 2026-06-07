@@ -126,7 +126,6 @@ class LeagueSeasonService
         ]);
 
         $this->refreshSeasonStatus($match->season);
-        $this->maybeAdvanceWeek($match->season);
 
         return $match->fresh(['homeTeam', 'awayTeam']);
     }
@@ -189,6 +188,12 @@ class LeagueSeasonService
 
     public function updateMatchScore(FootballMatch $match, int $homeGoals, int $awayGoals): FootballMatch
     {
+        $season = $match->season;
+
+        if ($season->status === Season::STATUS_FINISHED) {
+            throw new \InvalidArgumentException('Cannot edit scores after the season has finished.');
+        }
+
         $match->update([
             'home_goals' => $homeGoals,
             'away_goals' => $awayGoals,
@@ -197,36 +202,8 @@ class LeagueSeasonService
         ]);
 
         $this->refreshSeasonStatus($match->season);
-        $this->maybeAdvanceWeek($match->season);
 
         return $match->fresh(['homeTeam', 'awayTeam']);
-    }
-
-    private function maybeAdvanceWeek(Season $season): void
-    {
-        $season->refresh();
-
-        if ($season->isFinished()) {
-            return;
-        }
-
-        $currentWeekMatches = $season->matches()->where('week', $season->current_week)->get();
-
-        if ($currentWeekMatches->isEmpty()) {
-            return;
-        }
-
-        if (! $currentWeekMatches->every(fn (FootballMatch $match) => $match->isPlayed())) {
-            return;
-        }
-
-        if ($season->current_week >= $season->total_weeks) {
-            $season->update(['status' => Season::STATUS_FINISHED]);
-
-            return;
-        }
-
-        $season->update(['current_week' => $season->current_week + 1]);
     }
 
     private function refreshSeasonStatus(Season $season): void

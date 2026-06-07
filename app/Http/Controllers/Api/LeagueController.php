@@ -115,11 +115,15 @@ class LeagueController extends Controller
             'away_goals' => ['required', 'integer', 'min:0', 'max:20'],
         ]);
 
-        $this->leagueSeasonService->updateMatchScore(
-            $match,
-            $validated['home_goals'],
-            $validated['away_goals'],
-        );
+        try {
+            $this->leagueSeasonService->updateMatchScore(
+                $match,
+                $validated['home_goals'],
+                $validated['away_goals'],
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
 
         return response()->json($this->leagueSeasonService->buildState());
     }
