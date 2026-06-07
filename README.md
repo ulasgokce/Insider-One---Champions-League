@@ -4,22 +4,24 @@ A Laravel + Vue 3 Champions League group-stage simulator with realistic match ou
 
 ## Live Demo
 
-Deploy to [Render.com](https://render.com) using the included `render.yaml` blueprint, then add your live URL here:
+**GitHub:** https://github.com/ulasgokce/Insider-One---Champions-League
 
-`https://your-service.onrender.com`
+After deploying to Render (see below), your live URL will look like:
 
-## GitHub Repository
+`https://champions-league-xxxx.onrender.com`
 
-https://github.com/ulasgokce/Insider-One---Champions-League
+Replace this line with your actual Render URL once deployed.
 
 ## Features
 
-- 4-team double round-robin (6 weeks, 12 matches)
+- 4-team double round-robin (6 weeks, 12 matches) — pick any 4 clubs from a pool of 10
 - Realistic Poisson-based match simulation using team power, home advantage, supporter strength, and goalkeeper factors
-- Week-by-week simulation with per-match play or play entire week
-- Championship predictions from Week 4 (last 3 weeks) with Monte Carlo simulation and mathematical clinch detection
-- Play All season shortcut and manual score editing
-- Mobile-first responsive UI with dark/light mode and smooth transitions
+- Week-by-week simulation with per-match play or **Play Week**; weeks auto-advance when complete
+- Championship predictions from Week 4 (last 3 weeks) with Monte Carlo simulation, clinch detection, and tight-race weighting
+- **Play All** runs the full season and shows **Season Results by Week**
+- **Edit scores** on played matches (pencil icon) — standings and predictions recalculate
+- Trophy + confetti when the season finishes
+- Mobile-first responsive UI, dark/light mode, SweetAlert confirmations
 - SQLite database (no separate DB hosting required)
 
 ## Tech Stack
@@ -27,12 +29,13 @@ https://github.com/ulasgokce/Insider-One---Champions-League
 - **Backend:** Laravel 13 (PHP 8.3), strict OOP service layer
 - **Frontend:** Vue 3 + Vite + Tailwind CSS v4
 - **Database:** SQLite
-- **Tests:** PHPUnit
-- **Deployment:** Render.com (Docker)
+- **Tests:** PHPUnit (10 tests)
+- **Deployment:** Render.com (Docker Web Service — **not** a static site)
 
 ## Local Setup
 
 ```bash
+git clone https://github.com/ulasgokce/Insider-One---Champions-League.git
 cd Insider-One---Champions-League
 composer install
 cp .env.example .env
@@ -65,10 +68,11 @@ php artisan test
 | Method | Route | Description |
 |--------|-------|-------------|
 | GET | `/api/league/state` | Current league state |
-| POST | `/api/league/start` | Reset season |
+| GET | `/api/teams` | All 10 teams + default selection |
+| POST | `/api/league/start` | Reset season (optional `team_ids`) |
+| POST | `/api/league/configure-teams` | Set 4 teams and reset season |
 | POST | `/api/matches/{id}/play` | Simulate one match |
 | POST | `/api/league/play-week` | Simulate current week |
-| POST | `/api/league/next-week` | Advance to next week |
 | POST | `/api/league/play-all` | Simulate entire season |
 | PATCH | `/api/matches/{id}` | Edit match score |
 
@@ -76,20 +80,60 @@ php artisan test
 
 Business logic lives in dedicated services under `app/Services/`:
 
+- `TeamPoolService` — 10-team pool and logo paths
 - `FixtureGeneratorService` — round-robin schedule generation
 - `MatchSimulationService` — Poisson goal simulation
-- `LeagueTableService` — Premier League scoring and tie-breakers
+- `LeagueTableService` — Premier League scoring and tie-breakers (incl. head-to-head)
 - `ChampionshipPredictionService` — title probability estimation
 - `LeagueSeasonService` — season orchestration
 
 ## Deploy to Render
 
-1. Push this repo to GitHub
-2. In Render: **New → Blueprint** → connect the repository
-3. Set `APP_URL` to your Render service URL
-4. Deploy — migrations run automatically on boot
+> **Important:** This is a **Laravel PHP app**. Do **not** create a Render **Static Site**. Use a **Web Service** (Docker) instead.
 
-Note: Render free tier uses ephemeral storage; league progress may reset on redeploy. Use **Reset Season** or replay from Week 1.
+### Recommended: Blueprint (easiest)
+
+1. Push this repo to GitHub
+2. Go to [render.com](https://render.com) → **New** → **Blueprint**
+3. Connect `ulasgokce/Insider-One---Champions-League`
+4. Render reads `render.yaml` automatically
+5. After deploy, set **Environment Variable** `APP_URL` to your service URL (e.g. `https://champions-league-xxxx.onrender.com`)
+6. Paste that URL in this README under **Live Demo**
+
+### Manual Web Service (if not using Blueprint)
+
+| Setting | Value |
+|---------|--------|
+| **Type** | Web Service (not Static Site) |
+| **Repository** | `ulasgokce/Insider-One---Champions-League` |
+| **Branch** | `main` |
+| **Root Directory** | *(leave empty)* |
+| **Runtime** | Docker |
+| **Dockerfile path** | `./Dockerfile` |
+| **Build Command** | *(leave empty — Docker handles build)* |
+| **Publish Directory** | *(leave empty — not used for Docker)* |
+
+**Environment variables:**
+
+See [`.env.render.example`](.env.render.example) for the full production template.
+
+| Key | Value |
+|-----|--------|
+| `APP_URL` | Your Render service URL |
+| `APP_ENV` | `production` |
+| `APP_DEBUG` | `false` |
+| `APP_KEY` | Generate with `php artisan key:generate --show` |
+| `DB_CONNECTION` | `sqlite` |
+| `DB_DATABASE` | `/var/www/html/database/database.sqlite` |
+| `LOG_CHANNEL` | `stderr` |
+| `PORT` | `8080` |
+| `SEED_ON_BOOT` | `false` |
+
+In Render you can use **Add from .env** after copying the example to `.env.render` and filling in `APP_KEY` + `APP_URL`.
+
+`APP_KEY` is auto-generated by the Blueprint. Migrations run on container start via `docker/entrypoint.sh`.
+
+Note: Render free tier uses ephemeral storage; league progress may reset on redeploy.
 
 ## License
 

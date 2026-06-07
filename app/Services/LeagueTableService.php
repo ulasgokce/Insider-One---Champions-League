@@ -72,8 +72,8 @@ class LeagueTableService
         }
 
         $sorted = array_values($rows);
-        usort($sorted, function (array $a, array $b): int {
-            return $this->compareRows($a, $b);
+        usort($sorted, function (array $a, array $b) use ($playedMatches): int {
+            return $this->compareRows($a, $b, $playedMatches);
         });
 
         foreach ($sorted as $index => &$row) {
@@ -86,10 +86,64 @@ class LeagueTableService
     /**
      * @param  array<string, mixed>  $a
      * @param  array<string, mixed>  $b
+     * @param  Collection<int, FootballMatch>  $playedMatches
      */
-    private function compareRows(array $a, array $b): int
+    private function compareRows(array $a, array $b, Collection $playedMatches): int
     {
-        return [$b['points'], $b['goal_difference'], $b['goals_for'], $a['name']]
-            <=> [$a['points'], $a['goal_difference'], $a['goals_for'], $b['name']];
+        $primary = [$b['points'], $b['goal_difference'], $b['goals_for']]
+            <=> [$a['points'], $a['goal_difference'], $a['goals_for']];
+
+        if ($primary !== 0) {
+            return $primary;
+        }
+
+        $headToHead = $this->compareHeadToHead($a['team_id'], $b['team_id'], $playedMatches);
+
+        if ($headToHead !== 0) {
+            return $headToHead;
+        }
+
+        return $a['name'] <=> $b['name'];
+    }
+
+    /**
+     * @param  Collection<int, FootballMatch>  $playedMatches
+     */
+    private function compareHeadToHead(int $teamAId, int $teamBId, Collection $playedMatches): int
+    {
+        $pointsA = 0;
+        $pointsB = 0;
+        $goalsA = 0;
+        $goalsB = 0;
+
+        foreach ($playedMatches as $match) {
+            if (! $match->isPlayed()) {
+                continue;
+            }
+
+            $isHeadToHead = ($match->home_team_id === $teamAId && $match->away_team_id === $teamBId)
+                || ($match->home_team_id === $teamBId && $match->away_team_id === $teamAId);
+
+            if (! $isHeadToHead) {
+                continue;
+            }
+
+            $teamAGoals = $match->home_team_id === $teamAId ? $match->home_goals : $match->away_goals;
+            $teamBGoals = $match->home_team_id === $teamBId ? $match->home_goals : $match->away_goals;
+
+            $goalsA += $teamAGoals;
+            $goalsB += $teamBGoals;
+
+            if ($teamAGoals > $teamBGoals) {
+                $pointsA += 3;
+            } elseif ($teamBGoals > $teamAGoals) {
+                $pointsB += 3;
+            } else {
+                $pointsA++;
+                $pointsB++;
+            }
+        }
+
+        return [$pointsB, $goalsB - $goalsA, $goalsB] <=> [$pointsA, $goalsA - $goalsB, $goalsA];
     }
 }

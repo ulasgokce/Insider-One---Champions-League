@@ -73,16 +73,30 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import TeamLogo from './TeamLogo.vue';
 
 const props = defineProps({
     currentWeek: { type: Number, required: true },
     totalWeeks: { type: Number, required: true },
     fixturesByWeek: { type: Array, default: () => [] },
+    expanded: { type: Boolean, default: false },
 });
 
-const expanded = ref(false);
+const emit = defineEmits(['update:expanded']);
+
+const expanded = ref(props.expanded);
+
+watch(
+    () => props.expanded,
+    (value) => {
+        expanded.value = value;
+    },
+);
+
+watch(expanded, (value) => {
+    emit('update:expanded', value);
+});
 
 const progress = computed(() => (props.currentWeek / props.totalWeeks) * 100);
 </script>

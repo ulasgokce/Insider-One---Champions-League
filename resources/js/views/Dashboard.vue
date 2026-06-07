@@ -17,6 +17,7 @@
             <template v-else-if="state">
                 <Transition name="panel">
                     <WeekBanner
+                        v-model:expanded="seasonProgressExpanded"
                         :current-week="state.season.current_week"
                         :total-weeks="state.season.total_weeks"
                         :fixtures-by-week="state.results_by_week"
@@ -65,6 +66,15 @@
                             </Transition>
                         </div>
                     </div>
+
+                    <Transition name="slide-fade">
+                        <SeasonResultsByWeek
+                            v-if="showPlayAllResults"
+                            ref="playAllResultsRef"
+                            :results-by-week="playAllResults"
+                            @edit-match="openEditModal"
+                        />
+                    </Transition>
                 </div>
             </template>
         </main>
@@ -112,6 +122,7 @@ import DashboardControls from '../components/DashboardControls.vue';
 import MatchEditModal from '../components/MatchEditModal.vue';
 import TeamSelectModal from '../components/TeamSelectModal.vue';
 import ConfettiOverlay from '../components/ConfettiOverlay.vue';
+import SeasonResultsByWeek from '../components/SeasonResultsByWeek.vue';
 import { confirmApplyTeams, confirmResetSeason } from '../utils/swal';
 
 const state = ref(null);
@@ -124,7 +135,24 @@ const showTeamModal = ref(false);
 const showConfetti = ref(false);
 const confettiFired = ref(false);
 const trophySectionRef = ref(null);
+const playAllResultsRef = ref(null);
 const initialLoadComplete = ref(false);
+const seasonProgressExpanded = ref(false);
+const showPlayAllResults = ref(false);
+const playAllResults = ref([]);
+
+const scrollToElement = (element) => {
+    if (!element) {
+        return;
+    }
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    element.scrollIntoView({
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+        block: 'start',
+    });
+};
 
 const scrollToTrophy = () => {
     nextTick(() => {
@@ -140,6 +168,14 @@ const scrollToTrophy = () => {
                 behavior: prefersReducedMotion ? 'auto' : 'smooth',
                 block: 'center',
             });
+        });
+    });
+};
+
+const scrollToPlayAllResults = () => {
+    nextTick(() => {
+        requestAnimationFrame(() => {
+            scrollToElement(playAllResultsRef.value?.sectionRef);
         });
     });
 };
@@ -230,6 +266,10 @@ const playAll = async () => {
     try {
         const { data } = await leagueApi.playAll();
         state.value = data;
+        playAllResults.value = data.play_all_results ?? data.results_by_week ?? [];
+        showPlayAllResults.value = true;
+        seasonProgressExpanded.value = true;
+        scrollToPlayAllResults();
     } catch (err) {
         error.value = err.response?.data?.message ?? 'Failed to play all matches.';
     } finally {
@@ -252,6 +292,9 @@ const resetSeason = async () => {
         });
         state.value = data;
         confettiFired.value = false;
+        showPlayAllResults.value = false;
+        playAllResults.value = [];
+        seasonProgressExpanded.value = false;
     } catch (err) {
         error.value = err.response?.data?.message ?? 'Failed to reset season.';
     } finally {
@@ -273,6 +316,9 @@ const configureTeams = async (teamIds) => {
         state.value = data;
         showTeamModal.value = false;
         confettiFired.value = false;
+        showPlayAllResults.value = false;
+        playAllResults.value = [];
+        seasonProgressExpanded.value = false;
     } catch (err) {
         error.value = err.response?.data?.message ?? 'Failed to update teams.';
     } finally {
