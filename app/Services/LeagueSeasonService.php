@@ -15,10 +15,13 @@ class LeagueSeasonService
         private readonly MatchSimulationService $simulationService,
         private readonly LeagueTableService $tableService,
         private readonly ChampionshipPredictionService $predictionService,
+        private readonly TeamPoolService $teamPoolService,
     ) {}
 
     public function getOrCreateActiveSeason(): Season
     {
+        $this->teamPoolService->ensurePool();
+
         $season = Season::query()->latest()->first();
 
         if ($season) {
@@ -28,13 +31,21 @@ class LeagueSeasonService
         return $this->startNewSeason();
     }
 
-    public function startNewSeason(): Season
+    /**
+     * @param  list<int>|null  $teamIds
+     */
+    public function startNewSeason(?array $teamIds = null): Season
     {
-        return DB::transaction(function () {
+        $this->teamPoolService->ensurePool();
+
+        $teams = $teamIds
+            ? $this->teamPoolService->resolveSelection($teamIds)
+            : $this->teamPoolService->defaultSelection();
+
+        return DB::transaction(function () use ($teams) {
             FootballMatch::query()->delete();
             Season::query()->delete();
 
-            $teams = $this->seedTeams();
             $fixtures = $this->fixtureGenerator->generate($teams);
 
             $season = Season::query()->create([
@@ -56,38 +67,26 @@ class LeagueSeasonService
     }
 
     /**
-     * @return Collection<int, Team>
-     */
-    private function seedTeams(): Collection
-    {
-        Team::query()->delete();
-
-        $definitions = [
-            ['name' => 'Manchester City', 'short_name' => 'Man City', 'country' => 'ENG', 'power_rating' => 95, 'home_advantage' => 8, 'supporter_strength' => 9, 'goalkeeper_factor' => 9],
-            ['name' => 'Real Madrid', 'short_name' => 'Real Madrid', 'country' => 'ESP', 'power_rating' => 90, 'home_advantage' => 9, 'supporter_strength' => 10, 'goalkeeper_factor' => 8],
-            ['name' => 'Chelsea', 'short_name' => 'Chelsea', 'country' => 'ENG', 'power_rating' => 75, 'home_advantage' => 6, 'supporter_strength' => 7, 'goalkeeper_factor' => 7],
-            ['name' => 'Galatasaray', 'short_name' => 'Galatasaray', 'country' => 'TUR', 'power_rating' => 55, 'home_advantage' => 10, 'supporter_strength' => 9, 'goalkeeper_factor' => 5],
-        ];
-
-        foreach ($definitions as $definition) {
-            Team::query()->create($definition);
-        }
-
-        return Team::query()->orderBy('name')->get();
-    }
-
-    /**
      * @return array<string, mixed>
      */
     public function buildState(?Season $season = null): array
     {
+        $this->teamPoolService->ensurePool();
+
         $season = $season ?? $this->getOrCreateActiveSeason();
-        $teams = Team::query()->orderBy('name')->get();
         $matches = $season->matches()->with(['homeTeam', 'awayTeam'])->orderBy('week')->orderBy('id')->get();
+        $teamIds = $matches->flatMap(fn (FootballMatch $match) => [$match->home_team_id, $match->away_team_id])->unique();
+        $teams = Team::query()->whereIn('id', $teamIds)->orderBy('name')->get();
         $playedMatches = $matches->filter(fn (FootballMatch $match) => $match->isPlayed());
         $standings = $this->tableService->calculate($teams, $playedMatches);
         $currentWeekMatches = $matches->where('week', $season->current_week)->values();
         $predictions = $this->predictionService->predict($season, $teams, $matches);
+        $allTeams = Team::query()->orderBy('name')->get();
+
+        $champion = null;
+        if ($season->isFinished() && count($standings) > 0) {
+            $champion = $standings[0];
+        }
 
         return [
             'season' => [
@@ -98,11 +97,16 @@ class LeagueSeasonService
                 'predictions_visible' => $season->predictionsVisible(),
                 'current_week_complete' => $currentWeekMatches->every(fn (FootballMatch $match) => $match->isPlayed()),
                 'has_unplayed_matches' => $matches->contains(fn (FootballMatch $match) => ! $match->isPlayed()),
+                'is_finished' => $season->isFinished(),
             ],
             'standings' => $standings,
             'current_week_fixtures' => $currentWeekMatches->map(fn (FootballMatch $match) => $this->formatMatch($match))->values(),
             'predictions' => $predictions,
             'results_by_week' => $this->groupResultsByWeek($matches),
+            'champion' => $champion,
+            'all_teams' => $allTeams->map(fn (Team $team) => $this->teamPoolService->formatTeam($team))->values(),
+            'selected_team_ids' => $teamIds->values()->all(),
+            'default_team_ids' => $this->teamPoolService->defaultTeamIds(),
         ];
     }
 
@@ -122,6 +126,7 @@ class LeagueSeasonService
         ]);
 
         $this->refreshSeasonStatus($match->season);
+        $this->maybeAdvanceWeek($match->season);
 
         return $match->fresh(['homeTeam', 'awayTeam']);
     }
@@ -192,8 +197,36 @@ class LeagueSeasonService
         ]);
 
         $this->refreshSeasonStatus($match->season);
+        $this->maybeAdvanceWeek($match->season);
 
         return $match->fresh(['homeTeam', 'awayTeam']);
+    }
+
+    private function maybeAdvanceWeek(Season $season): void
+    {
+        $season->refresh();
+
+        if ($season->isFinished()) {
+            return;
+        }
+
+        $currentWeekMatches = $season->matches()->where('week', $season->current_week)->get();
+
+        if ($currentWeekMatches->isEmpty()) {
+            return;
+        }
+
+        if (! $currentWeekMatches->every(fn (FootballMatch $match) => $match->isPlayed())) {
+            return;
+        }
+
+        if ($season->current_week >= $season->total_weeks) {
+            $season->update(['status' => Season::STATUS_FINISHED]);
+
+            return;
+        }
+
+        $season->update(['current_week' => $season->current_week + 1]);
     }
 
     private function refreshSeasonStatus(Season $season): void
@@ -221,19 +254,25 @@ class LeagueSeasonService
             'id' => $match->id,
             'week' => $match->week,
             'status' => $match->status,
-            'home_team' => [
-                'id' => $match->homeTeam->id,
-                'name' => $match->homeTeam->name,
-                'short_name' => $match->homeTeam->short_name,
-            ],
-            'away_team' => [
-                'id' => $match->awayTeam->id,
-                'name' => $match->awayTeam->name,
-                'short_name' => $match->awayTeam->short_name,
-            ],
+            'home_team' => $this->formatTeam($match->homeTeam),
+            'away_team' => $this->formatTeam($match->awayTeam),
             'home_goals' => $match->home_goals,
             'away_goals' => $match->away_goals,
             'played_at' => $match->played_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function formatTeam(Team $team): array
+    {
+        return [
+            'id' => $team->id,
+            'slug' => $team->slug,
+            'name' => $team->name,
+            'short_name' => $team->short_name,
+            'logo_url' => $team->logoUrl(),
         ];
     }
 

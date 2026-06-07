@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\FootballMatch;
 use App\Services\LeagueSeasonService;
+use App\Services\TeamPoolService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -12,6 +13,7 @@ class LeagueController extends Controller
 {
     public function __construct(
         private readonly LeagueSeasonService $leagueSeasonService,
+        private readonly TeamPoolService $teamPoolService,
     ) {}
 
     public function state(): JsonResponse
@@ -19,9 +21,45 @@ class LeagueController extends Controller
         return response()->json($this->leagueSeasonService->buildState());
     }
 
-    public function start(): JsonResponse
+    public function teams(): JsonResponse
     {
-        $season = $this->leagueSeasonService->startNewSeason();
+        $teams = $this->teamPoolService->ensurePool();
+
+        return response()->json([
+            'teams' => $teams->map(fn ($team) => $this->teamPoolService->formatTeam($team))->values(),
+            'default_slugs' => TeamPoolService::DEFAULT_SLUGS,
+            'default_team_ids' => $this->teamPoolService->defaultTeamIds(),
+        ]);
+    }
+
+    public function start(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'team_ids' => ['sometimes', 'array', 'size:4'],
+            'team_ids.*' => ['integer', 'exists:teams,id'],
+        ]);
+
+        try {
+            $season = $this->leagueSeasonService->startNewSeason($validated['team_ids'] ?? null);
+        } catch (\InvalidArgumentException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json($this->leagueSeasonService->buildState($season));
+    }
+
+    public function configureTeams(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'team_ids' => ['required', 'array', 'size:4'],
+            'team_ids.*' => ['integer', 'distinct', 'exists:teams,id'],
+        ]);
+
+        try {
+            $season = $this->leagueSeasonService->startNewSeason($validated['team_ids']);
+        } catch (\InvalidArgumentException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
 
         return response()->json($this->leagueSeasonService->buildState($season));
     }

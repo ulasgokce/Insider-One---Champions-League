@@ -20,6 +20,8 @@ class LeagueTableService
         foreach ($teams as $team) {
             $rows[$team->id] = [
                 'team_id' => $team->id,
+                'slug' => $team->slug,
+                'logo_url' => $team->logoUrl(),
                 'name' => $team->name,
                 'short_name' => $team->short_name,
                 'country' => $team->country,

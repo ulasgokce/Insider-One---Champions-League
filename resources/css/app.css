@@ -20,11 +20,49 @@
     body {
         @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen;
     }
+
+    button:not(:disabled),
+    [role='button']:not([aria-disabled='true']) {
+        cursor: pointer;
+    }
+
+    button:disabled {
+        cursor: not-allowed;
+    }
 }
 
 @layer utilities {
     .pb-safe {
         padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    }
+
+    .ball-spin {
+        animation: ball-spin 0.75s linear infinite;
+        display: inline-block;
+    }
+
+    .score-pop {
+        animation: score-pop 0.3s ease-out;
+    }
+}
+
+@keyframes ball-spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes score-pop {
+    from {
+        transform: scale(0.9);
+    }
+
+    to {
+        transform: scale(1);
     }
 }
 
@@ -72,5 +110,13 @@
     .list-enter-active,
     .list-leave-active {
         transition: none !important;
+    }
+
+    .ball-spin {
+        animation: none;
+    }
+
+    .score-pop {
+        animation: none;
     }
 }

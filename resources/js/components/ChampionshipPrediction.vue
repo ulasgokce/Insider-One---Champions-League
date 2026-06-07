@@ -1,7 +1,7 @@
 <template>
     <section
         v-if="visible"
-        class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+        class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:p-5"
     >
         <h2 class="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Championship Predictions
@@ -9,8 +9,11 @@
 
         <div class="space-y-4">
             <div v-for="item in predictions" :key="item.team_id">
-                <div class="mb-1 flex items-center justify-between text-sm">
-                    <span class="font-medium">{{ item.short_name }}</span>
+                <div class="mb-1 flex items-center justify-between gap-2 text-sm">
+                    <span class="flex items-center gap-2 font-medium">
+                        <TeamLogo v-if="teamById(item.team_id)" :team="teamById(item.team_id)" size="sm" />
+                        {{ item.short_name }}
+                    </span>
                     <span class="font-bold text-emerald-600 dark:text-emerald-400">{{ item.percentage }}%</span>
                 </div>
                 <div class="h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
@@ -25,15 +28,33 @@
 
     <section
         v-else
-        class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400"
+        class="flex min-h-[220px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center dark:border-slate-700 dark:bg-slate-900/50 md:min-h-[260px]"
     >
-        Championship predictions unlock in the last 3 weeks (from Week 4).
+        <div class="mb-3 text-3xl opacity-60">📊</div>
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Championship Predictions
+        </h2>
+        <p class="mt-3 max-w-xs text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+            Predictions will appear from Week 4, once the season enters its final three weeks.
+        </p>
     </section>
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue';
+import TeamLogo from './TeamLogo.vue';
+
+const props = defineProps({
     predictions: { type: Array, default: () => [] },
     visible: { type: Boolean, default: false },
+    standings: { type: Array, default: () => [] },
+});
+
+const teamById = computed(() => {
+    const map = {};
+    props.standings.forEach((row) => {
+        map[row.team_id] = row;
+    });
+    return (id) => map[id] ?? null;
 });
 </script>

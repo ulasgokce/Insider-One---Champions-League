@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\TeamPoolService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -9,6 +10,7 @@ class Team extends Model
 {
     protected $fillable = [
         'id',
+        'slug',
         'name',
         'short_name',
         'country',
@@ -26,6 +28,11 @@ class Team extends Model
     public function awayMatches(): HasMany
     {
         return $this->hasMany(FootballMatch::class, 'away_team_id');
+    }
+
+    public function logoUrl(): string
+    {
+        return app(TeamPoolService::class)->logoUrlForSlug($this->slug);
     }
 
     public function effectiveStrength(bool $isHome): float

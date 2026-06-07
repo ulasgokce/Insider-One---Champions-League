@@ -27,8 +27,13 @@
                     >
                         <td class="py-3 pr-2 font-semibold">{{ row.position }}</td>
                         <td class="py-3">
-                            <div class="font-medium">{{ row.name }}</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ row.country }}</div>
+                            <div class="flex items-center gap-2">
+                                <TeamLogo :team="row" size="sm" />
+                                <div>
+                                    <div class="font-medium">{{ row.name }}</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">{{ row.country }}</div>
+                                </div>
+                            </div>
                         </td>
                         <td class="py-3 text-center">{{ row.played }}</td>
                         <td class="py-3 text-center">{{ row.won }}</td>
@@ -50,9 +55,12 @@
                     :class="{ 'bg-emerald-50/70 dark:bg-emerald-950/30': highlightedTeamId === row.team_id }"
                 >
                     <div class="flex items-center justify-between gap-3">
-                        <div>
-                            <p class="text-xs text-slate-500 dark:text-slate-400">#{{ row.position }}</p>
-                            <h3 class="font-semibold">{{ row.short_name }}</h3>
+                        <div class="flex items-center gap-2">
+                            <TeamLogo :team="row" size="sm" />
+                            <div>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">#{{ row.position }}</p>
+                                <h3 class="font-semibold">{{ row.short_name }}</h3>
+                            </div>
                         </div>
                         <div class="text-right">
                             <p class="text-2xl font-bold">{{ row.points }}</p>
@@ -69,6 +77,8 @@
 </template>
 
 <script setup>
+import TeamLogo from './TeamLogo.vue';
+
 defineProps({
     standings: { type: Array, default: () => [] },
     highlightedTeamId: { type: Number, default: null },
